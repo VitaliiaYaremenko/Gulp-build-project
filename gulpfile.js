@@ -13,6 +13,8 @@ const webp = require('gulp-webp');
 const svgSprite = require('gulp-svg-sprite');
 const fonter = require('gulp-fonter');
 const fontsFormat = require('gulp-ttf2woff2');
+const pug = require('gulp-pug');
+const include = require('gulp-include');
 const clean = require('gulp-clean');
 
 function styles() {
@@ -21,6 +23,22 @@ function styles() {
         .pipe(autoprefixer({overrideBrowserslist: ['last 3 version'],}))
         .pipe(scss({outputStyle: 'compressed'}))
         .pipe(dest('dist/css/'))
+        .pipe(browserSync.stream());
+}
+//___________________________________________________
+function compilePug() {
+    return src('dist/pug/*.pug')
+        .pipe(pug({pretty: true}))
+        .pipe(dest('build/'))
+        .pipe(browserSync.stream());
+}
+//___________________________________________________
+function  includePages () {
+    return src('dist/pages/*.html')
+        .pipe(include({
+            includePaths: 'dist/components',
+        }))
+        .pipe(dest('dist/'))
         .pipe(browserSync.stream());
 }
 //___________________________________________________
@@ -87,12 +105,13 @@ function script () {
 function watching () {
     browserSync.init({
         server: {
-            baseDir: "dist/pages/",
+            baseDir: "dist/",
         },
     });
         watch(['dist/scss/style.scss'], styles)
+        watch(['dist/pug/*.pug'], compilePug);
         watch(['dist/js/*.js','!dist/js/main.min.js'], script)
-        watch(['dist/components/*', 'dist/pages/*'])
+        watch(['dist/components/*', 'dist/pages/*'], includePages)
         watch(['dist/images/src-img'], images)
         watch(['dist/**/*.html']).on('change', browserSync.reload);
 }
@@ -121,9 +140,10 @@ exports.fonts = fonts;
 exports.images = images;
 exports.sprite = sprite;
 exports.script = script;
+exports.includePages = includePages;
 exports.watching = watching;
 exports.building = building;
 
 
-exports.default = parallel(styles, images, script, watching);
+exports.default = parallel(styles, images, script, compilePug, includePages,  watching);
 exports.build = series(cleanDist, building);
