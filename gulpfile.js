@@ -16,12 +16,17 @@ const fontsFormat = require('gulp-ttf2woff2');
 const pug = require('gulp-pug');
 const include = require('gulp-include');
 const clean = require('gulp-clean');
+const gulpIf = require('gulp-if');
+const rename = require('gulp-rename');
 
-function styles() {
-    return src('dist/scss/style.scss')
+function compileStyles(f) { f();
+    return src([
+        'node_modules/swiper/swiper-bundle.css',
+        'dist/scss/style.scss'
+    ])
         .pipe(concat('style.min.css'))
+        .pipe(scss({outputStyle: 'compressed'}).on('error', scss.logError))
         .pipe(autoprefixer({overrideBrowserslist: ['last 3 version'],}))
-        .pipe(scss({outputStyle: 'compressed'}))
         .pipe(dest('dist/css/'))
         .pipe(browserSync.stream());
 }
@@ -49,14 +54,20 @@ function fonts () {
         }))
         .pipe(src('dist/fonts/*.ttf'))
         .pipe(fontsFormat())
-        .pipe(dest('dist/fonts/fonts-build'))
+        .pipe(dest('dist/fonts/'))
 }
 //___________________________________________________
-function images () {
-    return src([
-        'dist/images/src-img/*.*',
-    ])
-        .pipe(newer('dist/images/build'))
+
+function images() {
+    const buildDir = 'dist/images/build';
+
+    return src('dist/images/**/*.*', { base: 'dist/images' })
+        .pipe(gulpIf(
+            file => !file.isDirectory(),
+            rename(filePath => {
+                filePath.dirname = '';
+            })
+        ))
         .pipe(imagemin([
             imagemin.gifsicle({interlaced: true }),
             imagemin.mozjpeg({quality: 75, progressive: true }),
@@ -68,12 +79,10 @@ function images () {
                 ]
             })
         ]))
-        .pipe(dest('dist/images/build'))
-        .pipe(newer('dist/images/build'))
-        .pipe(webp())
-        .pipe(dest('dist/images/build'))
-}
 
+        .pipe(webp())
+        .pipe(dest(buildDir));
+}
 //___________________________________________________
 function sprite () {
     return src('dist/images/build/*.svg')
@@ -91,7 +100,7 @@ function sprite () {
 
 function script () {
     return src([
-        // 'node_modules/swiper/swiper-bundle.js',
+        'node_modules/swiper/swiper-bundle.js',
         'dist/js/*.js',
         '!dist/js/main.min.js'
     ])
@@ -108,12 +117,12 @@ function watching () {
             baseDir: "dist/",
         },
     });
-        watch(['dist/scss/style.scss'], styles)
-        watch(['dist/pug/*.pug'], compilePug);
-        watch(['dist/js/*.js','!dist/js/main.min.js'], script)
-        watch(['dist/components/*', 'dist/pages/*'], includePages)
-        watch(['dist/images/src-img'], images)
-        watch(['dist/**/*.html']).on('change', browserSync.reload);
+    watch(['dist/scss/**/*.scss'], compileStyles);
+    watch(['dist/pug/*.pug'], compilePug);
+    watch(['dist/js/*.js','!dist/js/main.min.js'], script)
+    watch(['dist/components/*', 'dist/pages/*'], includePages)
+    watch(['dist/images/**/*.*'], series(images, browserSync.reload));
+    watch(['dist/**/*.html']).on('change', browserSync.reload);
 }
 //___________________________________________________
 
@@ -126,16 +135,17 @@ function building () {
     return src([
         'dist/css/style.min.css',
         'dist/images/build/**/!(*.svg)',
-        'dist/fonts/fonts-build/*.*',
+        'dist/fonts/*',
         'dist/js/main.min.js',
         'dist/**/*.html',
-        'dist/images/build/sprite.svg'
+        'dist/images/build/sprite.svg',
+        '!dist/images/build/stack'
     ], {base: 'dist'})
         .pipe(dest('build'));
 }
 //___________________________________________________
 
-exports.styles = styles;
+exports.compileStyles = compileStyles;
 exports.fonts = fonts;
 exports.images = images;
 exports.sprite = sprite;
@@ -145,5 +155,5 @@ exports.watching = watching;
 exports.building = building;
 
 
-exports.default = parallel(styles, images, script, compilePug, includePages,  watching);
+exports.default = parallel(compileStyles, fonts, images, script, compilePug, includePages,  watching);
 exports.build = series(cleanDist, building);
